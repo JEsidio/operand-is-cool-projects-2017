@@ -150,7 +150,7 @@ $app->delete('/v1/bankaccounts/{id:[0-9]+}', function($id) use ($app) {
 
 
 $app->get('/v1/bankaccounts/search/{id:[0-9]+}', function ($id) use ($app) {
-    $sql = "SELECT id, nome, balance FROM bank_account WHERE id = ?";
+    $sql = "SELECT id, name, balance FROM bank_account WHERE id = ?";
 
     $result = $app->db->query($sql, array($id));
     $result->setFetchMode(Phalcon\Db::FETCH_OBJ);
@@ -181,6 +181,71 @@ $app->get('/v1/bankaccounts/search/{id:[0-9]+}', function ($id) use ($app) {
 
     }
 });
+
+
+
+$app->post('/v1/bankaccounts/deposit', function () use ($app){
+    $depositInfo = $app->request->getPost();
+    if (!$depositInfo) {
+        $depositInfo = (array) $app->request->getJsonRawBody();
+    }
+
+    $response = new Phalcon\Http\Response();
+
+    try {
+        $result = $app->db->insert("bank_account_operations",
+            array("deposit",$depositInfo['bank_account_id'], $depositInfo['value'],date('Y-m-d H:i:s')),
+            array("operation","bank_account_id","value","date")
+        );
+
+        //atualizar saldo conta bancária
+        $sqlUpdate = "UPDATE bank_account SET balance = (SELECT SUM(value) as balance FROM bank_account_operations WHERE bank_account_id = ?) WHERE id = ?";
+        $app->db->query($sqlUpdate, array($depositInfo['bank_account_id'],$depositInfo['bank_account_id']));
+
+        $response->setStatusCode(201, "Created");
+        $response->setJsonContent(array('status' => 'OK'));
+
+    } catch (Exception $e) {
+        $response->setStatusCode(409, "Conflict");
+        $errors[] = $e->getMessage();
+        $response->setJsonContent(array('status' => 'ERROR', 'messages' => $errors));
+    }
+
+    return $response;
+});
+
+
+
+$app->post('/v1/bankaccounts/withdrawal', function () use ($app){
+    $withdrawalInfo = $app->request->getPost();
+    if (!$withdrawalInfo) {
+        $withdrawalInfo = (array) $app->request->getJsonRawBody();
+    }
+
+    $response = new Phalcon\Http\Response();
+
+    try {
+        $result = $app->db->insert("bank_account_operations",
+            array("withdrawal",$withdrawalInfo['bank_account_id'], $withdrawalInfo['value']*-1,date('Y-m-d H:i:s')),
+            array("operation","bank_account_id","value","date")
+        );
+
+        //atualizar saldo conta bancária
+        $sqlUpdate = "UPDATE bank_account SET balance = (SELECT SUM(value) as balance FROM bank_account_operations WHERE bank_account_id = ?) WHERE id = ?";
+        $app->db->query($sqlUpdate, array($withdrawalInfo['bank_account_id'],$withdrawalInfo['bank_account_id']));
+
+        $response->setStatusCode(201, "Created");
+        $response->setJsonContent(array('status' => 'OK'));
+
+    } catch (Exception $e) {
+        $response->setStatusCode(409, "Conflict");
+        $errors[] = $e->getMessage();
+        $response->setJsonContent(array('status' => 'ERROR', 'messages' => $errors));
+    }
+
+    return $response;
+});
+
 
 
 
